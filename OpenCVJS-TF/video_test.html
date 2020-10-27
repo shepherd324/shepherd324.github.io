@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>WebCam Test OpenCV.js</title>
+</head>
+<body>
+<h2>WebCam Test OpenCV.js</h2>
+<div>
+  <div class="inputoutput">
+    <video id="videoInput" width=320 height=240></video>
+    <canvas id="canvasOutput" width=320 height=240></canvas>
+  </div>
+   
+  
+</div>
+
+<script type="text/javascript">
+
+let video = document.getElementById("videoInput"); // video is the id of video tag
+navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+    .then(function(stream) {
+        video.srcObject = stream;
+        video.play();
+    })
+    .catch(function(err) {
+        console.log("An error occurred! " + err);
+    });
+
+function onOpenCvReady() {
+    cv['onRuntimeInitialized']=()=>{
+    // do all your work here
+
+    
+
+
+    //the mat that will be the video frame
+    let src = new cv.Mat(video.height, video.width, cv.CV_8UC4);
+    
+    //the mat we will actually show
+    let dst = new cv.Mat(video.height, video.width, cv.CV_8UC4);
+   
+    //the video capture instance
+    let cap = new cv.VideoCapture(video);
+    
+    //the mask created from bg subtraction
+    let fgmask = new cv.Mat(video.height, video.width, cv.CV_8UC1);
+    
+    //the bg subtraction alg w/ default parameters
+    let fgbg = new cv.BackgroundSubtractorMOG2(500, 16, true);
+    
+    //the kernels for morphology -- must be odd numbers
+    let M = cv.Mat.ones(5, 5, cv.CV_8U);
+    let M2 = cv.Mat.ones(7, 7, cv.CV_8U);
+    
+    //default Mat anchor of center
+    let anchor = new cv.Point(-1, -1);
+    //mask blur size
+    let ksize = new cv.Size(5, 5);
+    //bg blur size
+    let bgBlurSize = new cv.Size(21,21);
+    
+    //unused, but was gonna be for resizing the video before doing morphology
+    let dsize = new cv.Size(video.height/2, video.width/2);
+    let returnSize = new cv.Size(video.height, video.width);
+    
+    
+    const FPS = 30;
+    
+    function processVideo() {
+        //console.log("Process Video");
+        let begin = Date.now();
+        cap.read(src);
+        fgbg.apply(src, fgmask);
+        
+        
+        cv.GaussianBlur(fgmask, fgmask, ksize, 0, 0, cv.BORDER_DEFAULT);
+        
+        //fill in gaps
+        cv.morphologyEx(fgmask, fgmask, cv.MORPH_CLOSE, M2, anchor, 1,
+                cv.BORDER_CONSTANT, cv.morphologyDefaultBorderValue());
+
+        //kill noise
+        cv.morphologyEx(fgmask, fgmask, cv.MORPH_OPEN, M, anchor, 1,
+                cv.BORDER_CONSTANT, cv.morphologyDefaultBorderValue());
+
+
+        src.copyTo(dst);
+        cv.GaussianBlur(dst, dst, bgBlurSize, 0, 0, cv.BORDER_DEFAULT);
+        src.copyTo(dst, fgmask);
+        //cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY);
+        cv.imshow('canvasOutput', dst);
+        
+        // schedule next one.
+        let delay = 1000/FPS - (Date.now() - begin);
+        setTimeout(processVideo, delay);
+    }
+    // schedule first one.
+    setTimeout(processVideo, 0);
+
+  };
+}
+
+</script>
+
+<script async src="opencv.js" onload="onOpenCvReady();" type="text/javascript"></script>
+
+</body>
+</html>
